@@ -1,50 +1,35 @@
-library(reshape2)
+# STEP 1: Load the labels
+features <- read.table("features.txt", col.names = c("n","functions"))
+activities <- read.table("activity_labels.txt", col.names = c("code", "activity"))
 
-filename <- "getdata_dataset.zip"
+# STEP 2: Load the TEST pieces
+subject_test <- read.table("test/subject_test.txt", col.names = "subject")
+x_test <- read.table("test/X_test.txt", col.names = features$functions)
+y_test <- read.table("test/y_test.txt", col.names = "code")
 
-## Download and unzip the dataset:
-if (!file.exists(filename)){
-  fileURL <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip "
-  download.file(fileURL, filename, method="curl")
-}  
-if (!file.exists("UCI HAR Dataset")) { 
-  unzip(filename) 
-}
+# STEP 3: Load the TRAIN pieces
+subject_train <- read.table("train/subject_train.txt", col.names = "subject")
+x_train <- read.table("train/X_train.txt", col.names = features$functions)
+y_train <- read.table("train/y_train.txt", col.names = "code")
 
-# Load activity labels + features
-activityLabels <- read.table("UCI HAR Dataset/activity_labels.txt")
-activityLabels[,2] <- as.character(activityLabels[,2])
-features <- read.table("UCI HAR Dataset/features.txt")
-features[,2] <- as.character(features[,2])
+# STEP 4: Stack them together
+X_all <- rbind(x_train, x_test)
+Y_all <- rbind(y_train, y_test)
+Sub_all <- rbind(subject_train, subject_test)
+Merged_Data <- cbind(Sub_all, Y_all, X_all)
 
-# Extract only the data on mean and standard deviation
-featuresWanted <- grep(".*mean.*|.*std.*", features[,2])
-featuresWanted.names <- features[featuresWanted,2]
-featuresWanted.names = gsub('-mean', 'Mean', featuresWanted.names)
-featuresWanted.names = gsub('-std', 'Std', featuresWanted.names)
-featuresWanted.names <- gsub('[-()]', '', featuresWanted.names)
+# STEP 5: Extract Mean and STD (Simpler way)
+columns_to_keep <- grep("mean|std", features$functions, ignore.case=TRUE)
+TidyData <- Merged_Data[, c(1, 2, columns_to_keep + 2)]
 
+# STEP 6: Use word names for activities
+TidyData$code <- activities[TidyData$code, 2]
+colnames(TidyData)[2] <- "activity"
 
-# Load the datasets
-train <- read.table("UCI HAR Dataset/train/X_train.txt")[featuresWanted]
-trainActivities <- read.table("UCI HAR Dataset/train/Y_train.txt")
-trainSubjects <- read.table("UCI HAR Dataset/train/subject_train.txt")
-train <- cbind(trainSubjects, trainActivities, train)
+# STEP 7: Create the Final Table (The simplified version)
+Final_Neat_Table <- aggregate(. ~subject + activity, TidyData, mean)
 
-test <- read.table("UCI HAR Dataset/test/X_test.txt")[featuresWanted]
-testActivities <- read.table("UCI HAR Dataset/test/Y_test.txt")
-testSubjects <- read.table("UCI HAR Dataset/test/subject_test.txt")
-test <- cbind(testSubjects, testActivities, test)
+# STEP 8: Save the file
+write.table(Final_Neat_Table, "FinalData.txt", row.name=FALSE)
 
-# merge datasets and add labels
-allData <- rbind(train, test)
-colnames(allData) <- c("subject", "activity", featuresWanted.names)
-
-# turn activities & subjects into factors
-allData$activity <- factor(allData$activity, levels = activityLabels[,1], labels = activityLabels[,2])
-allData$subject <- as.factor(allData$subject)
-
-allData.melted <- melt(allData, id = c("subject", "activity"))
-allData.mean <- dcast(allData.melted, subject + activity ~ variable, mean)
-
-write.table(allData.mean, "tidy.txt", row.names = FALSE, quote = FALSE)
+print("Check your folder now - FinalData.txt should be there!")
